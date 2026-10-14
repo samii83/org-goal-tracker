@@ -1,22 +1,19 @@
-# Organization Goal Tracker
+# Organization Goal Tracker (Full-Stack MVP)
 
-A role-based organizational goal tracking web application built with **React, JavaScript, and Vite**. The application helps employees create and track goals, managers review and approve them, and administrators monitor organizational performance and progress.
-
-**Live Demo:** https://org-goal-tracker.vercel.app/
+A full-stack, role-based organizational goal tracking web application built with **React, FastAPI, Python, SQLAlchemy ORM, and SQLite/MySQL**. The application enables employees to create and track goals with persistent storage, managers to review and approve them, and administrators to monitor organizational performance through real-time SQL-backed analytics.
 
 ---
 
 ## Overview
 
-The Organization Goal Tracker is designed to model an organization's goal-setting and performance-tracking workflow.
+The Organization Goal Tracker models an organization's goal-setting and performance-tracking lifecycle with a high-performance Python REST API and an intuitive, responsive React frontend.
 
-The application provides different dashboards and workflows for:
+The application provides dedicated dashboards and workflows for:
 
-* **Employees** — create, manage, submit, and track goals
-* **Managers** — review, approve, return, and monitor employee goals
-* **Administrators** — monitor organizational performance, manage shared goals, and view analytics
+* **Employees** — create, edit, submit, and delete goals; assign weightage; track quarterly achievements
+* **Managers** — review and approve submitted goals, return goals for modification, record quarterly check-in feedback
+* **Administrators** — monitor organization-wide performance, push shared departmental KPIs, unlock approved goals for adjustments, review audit trails, and export reports
 
-The project is implemented as a frontend prototype using React state and JavaScript data structures.
 
 ---
 
@@ -471,17 +468,21 @@ Runs ESLint to identify potential JavaScript and React issues.
 
 ---
 
-## Full-Stack Architecture (FastAPI + MySQL + SQLAlchemy)
+## Full-Stack Architecture (FastAPI + SQLAlchemy + SQLite / MySQL)
 
-The application features a production-ready **FastAPI** backend supporting persistent storage, relational schema models, role-based security, and live health diagnostics:
+The application features a production-ready **FastAPI** backend supporting persistent storage, relational schema models, role-based security, live health diagnostics, and a SQL-backed real-time analytics dashboard:
 
 * **Backend Framework:** FastAPI (Python 3.10+) with async lifespan support
 * **ORM:** SQLAlchemy 2.0 with connection pooling
-* **Database Driver:** PyMySQL + Cryptography for MySQL / MariaDB (with SQLite fallback support)
-* **Authentication:** Email/password authentication with bcrypt hashing and signed HttpOnly cookie sessions
+* **Database Support:**
+  * **Default:** SQLite with persistent storage (`goaltrack.db` or `/app/data/goaltrack.db` in Docker)
+  * **Optional MySQL:** Specify `DATABASE_URL` (e.g. `mysql+pymysql://user:password@host:3306/dbname`). Does not silently switch if MySQL connection fails.
+* **Authentication:** Email/password authentication with `bcrypt` password hashing and signed HttpOnly cookie sessions
 * **Role-Based Access Control (RBAC):** Employee, Manager, and Admin roles
 * **Health & Diagnostics:** `/api/health` with live DB connectivity check and degraded-mode resilience
+* **SQL-Backed Dashboard:** `/api/dashboard/stats` reporting total goals, completed goals, overdue goals, and active in-progress goals
 * **CORS & Proxy:** Vite development proxy (`/api` -> `http://127.0.0.1:8000`) and FastAPI CORSMiddleware
+* **Production Static Serving:** FastAPI automatically serves the built React frontend (`dist/`) directly when available, enabling single-container full-stack deployments.
 
 ### Database Schema Models
 
@@ -501,9 +502,10 @@ The application features a production-ready **FastAPI** backend supporting persi
 
 * **Node.js** (v18+ or v20+) and **npm**
 * **Python** (3.10+ or 3.12+)
-* **MySQL** (v8.0+ or MariaDB 10.5+)
+* *(Optional)* **Docker & Docker Compose**
+* *(Optional)* **MySQL** (v8.0+ or MariaDB 10.5+ if using external MySQL)
 
-### 2. Backend Setup
+### 2. Backend Setup (Local Development)
 
 ```bash
 # 1. Create and activate a Python virtual environment
@@ -516,46 +518,50 @@ py -m venv .venv
 # 2. Install backend dependencies
 pip install -r backend/requirements.txt
 
-# 3. Configure environment variables
-# Copy template configuration:
+# 3. Configure environment variables (optional; defaults to SQLite automatically)
 cp .env.example .env
-# Edit .env with your MySQL credentials (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME)
 ```
 
-### 3. Running the Backend Server
+### 3. Running Development Servers
+
+**Option A — Two-Process Development (with hot reloading):**
 
 ```bash
-# Start FastAPI backend on http://127.0.0.1:8000
+# Terminal 1: Start FastAPI backend (http://127.0.0.1:8000)
 python backend/run.py
-# Or using uvicorn directly:
-uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2: Start Vite frontend (http://localhost:5173, proxies /api -> :8000)
+npm run dev
 ```
 
-Interactive API documentation (Swagger UI) is available at:
-* **Interactive Docs:** `http://127.0.0.1:8000/docs`
-* **Alternative ReDoc:** `http://127.0.0.1:8000/redoc`
-* **Health & DB Check:** `http://127.0.0.1:8000/api/health`
+**Option B — Single-Process Full-Stack Production Run:**
+
+```bash
+# 1. Build the React frontend
+npm run build
+
+# 2. Run the FastAPI server (serves both React frontend & REST API on port 8000)
+python backend/run.py
+```
+*Open `http://localhost:8000` in your browser.*
 
 ### 4. Running Backend Verification Tests
 
-An automated test suite is provided to verify table creation, seeding, health checks, authentication, cookie sessions, goal management, and audit logging:
+An automated test suite is provided to verify table creation, seeding, health checks, authentication, cookie sessions, goal CRUD operations, progress updates, and SQL dashboard statistics:
 
 ```bash
 python backend/test_app.py
 ```
 
-### 5. Frontend Setup
+### 5. Running with Docker Compose (Single Container Full-Stack)
+
+A multi-stage `Dockerfile` and `docker-compose.yml` are provided for containerized deployment with persistent SQLite storage:
 
 ```bash
-# Install frontend dependencies (if not already installed)
-npm install
-
-# Run Vite development server (proxies /api requests to localhost:8000)
-npm run dev
-
-# Build production bundle
-npm run build
+# Build and start container with persistent data volume:
+docker compose up -d --build
 ```
+*Access the application at `http://localhost:8000`.*
 
 ---
 
@@ -563,17 +569,16 @@ npm run build
 
 | Variable | Default | Description |
 | :--- | :--- | :--- |
-| `DB_HOST` | `127.0.0.1` | MySQL server hostname or IP address |
-| `DB_PORT` | `3306` | MySQL port |
-| `DB_USER` | `root` | Database user |
-| `DB_PASSWORD` | `""` | Database user password |
-| `DB_NAME` | `org_goal_tracker` | MySQL database name |
-| `DATABASE_URL` | Optional | Full SQLAlchemy URI (e.g. `mysql+pymysql://...` or `sqlite:///...`) |
-| `SECRET_KEY` | Dev string | 32+ byte cryptographic key for HMAC session cookie signing |
+| `DATABASE_URL` | `sqlite:///./goaltrack.db` | SQLAlchemy connection string. Defaults to persistent SQLite. Set to `mysql+pymysql://user:pass@host:3306/db` for MySQL. |
+| `PORT` | `8000` | Port for the backend server |
+| `HOST` | `0.0.0.0` | Host binding address |
+| `ENVIRONMENT` | `development` | Environment mode (`development` or `production`) |
+| `SECRET_KEY` | Dev string | 32+ byte cryptographic secret for HMAC session cookie signing |
 | `SESSION_COOKIE_NAME` | `goaltrack_session` | Name of the authentication cookie |
 | `SESSION_MAX_AGE_SECONDS` | `86400` | Session lifetime in seconds (24 hours) |
 | `COOKIE_SECURE` | `false` | Set to `true` when serving behind HTTPS in production |
 | `CORS_ORIGINS` | `http://localhost:5173,...` | Comma-separated allowed frontend origins |
+
 
 
 ---
