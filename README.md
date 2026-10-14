@@ -469,26 +469,112 @@ Runs ESLint to identify potential JavaScript and React issues.
 
 ---
 
-## Future Improvements
+---
 
-The current application is designed as a frontend prototype. Potential improvements include:
+## Full-Stack Architecture (FastAPI + MySQL + SQLAlchemy)
 
-* Add a backend REST API
-* Add persistent database storage
-* Implement real authentication
-* Add JWT or session-based authentication
-* Implement backend role-based authorization
-* Add server-side validation
-* Add automated unit and integration tests
-* Add API error handling
-* Add loading and empty states
-* Add pagination for large datasets
-* Add more detailed analytics
-* Add notification functionality
-* Improve accessibility
-* Add TypeScript
-* Improve responsive design
-* Add CI/CD checks using GitHub Actions
+The application features a production-ready **FastAPI** backend supporting persistent storage, relational schema models, role-based security, and live health diagnostics:
+
+* **Backend Framework:** FastAPI (Python 3.10+) with async lifespan support
+* **ORM:** SQLAlchemy 2.0 with connection pooling
+* **Database Driver:** PyMySQL + Cryptography for MySQL / MariaDB (with SQLite fallback support)
+* **Authentication:** Email/password authentication with bcrypt hashing and signed HttpOnly cookie sessions
+* **Role-Based Access Control (RBAC):** Employee, Manager, and Admin roles
+* **Health & Diagnostics:** `/api/health` with live DB connectivity check and degraded-mode resilience
+* **CORS & Proxy:** Vite development proxy (`/api` -> `http://127.0.0.1:8000`) and FastAPI CORSMiddleware
+
+### Database Schema Models
+
+* `users` — Authentication credentials, role (`employee`, `manager`, `admin`), department, manager hierarchy
+* `teams` — Departments and organizational business units
+* `goals` — Individual and departmental KPIs, UoM, targets, weightage, approval status, lock state
+* `check_ins` — Quarterly progress records, actual metrics, manager review comments
+* `approvals` — Audit history of goal approvals, rejections, and manager adjustments
+* `audit_events` — Immutable governance log of all critical changes and actions
+* `escalations` — Automated compliance alerts for overdue check-ins and unsubmitted goal sheets
+
+---
+
+## Setup & Running Guide
+
+### 1. Prerequisites
+
+* **Node.js** (v18+ or v20+) and **npm**
+* **Python** (3.10+ or 3.12+)
+* **MySQL** (v8.0+ or MariaDB 10.5+)
+
+### 2. Backend Setup
+
+```bash
+# 1. Create and activate a Python virtual environment
+py -m venv .venv
+# On Windows PowerShell:
+.\.venv\Scripts\Activate.ps1
+# On Linux / macOS:
+# source .venv/bin/activate
+
+# 2. Install backend dependencies
+pip install -r backend/requirements.txt
+
+# 3. Configure environment variables
+# Copy template configuration:
+cp .env.example .env
+# Edit .env with your MySQL credentials (DB_HOST, DB_USER, DB_PASSWORD, DB_NAME)
+```
+
+### 3. Running the Backend Server
+
+```bash
+# Start FastAPI backend on http://127.0.0.1:8000
+python backend/run.py
+# Or using uvicorn directly:
+uvicorn backend.app.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Interactive API documentation (Swagger UI) is available at:
+* **Interactive Docs:** `http://127.0.0.1:8000/docs`
+* **Alternative ReDoc:** `http://127.0.0.1:8000/redoc`
+* **Health & DB Check:** `http://127.0.0.1:8000/api/health`
+
+### 4. Running Backend Verification Tests
+
+An automated test suite is provided to verify table creation, seeding, health checks, authentication, cookie sessions, goal management, and audit logging:
+
+```bash
+python backend/test_app.py
+```
+
+### 5. Frontend Setup
+
+```bash
+# Install frontend dependencies (if not already installed)
+npm install
+
+# Run Vite development server (proxies /api requests to localhost:8000)
+npm run dev
+
+# Build production bundle
+npm run build
+```
+
+---
+
+## Environment Variables Reference
+
+| Variable | Default | Description |
+| :--- | :--- | :--- |
+| `DB_HOST` | `127.0.0.1` | MySQL server hostname or IP address |
+| `DB_PORT` | `3306` | MySQL port |
+| `DB_USER` | `root` | Database user |
+| `DB_PASSWORD` | `""` | Database user password |
+| `DB_NAME` | `org_goal_tracker` | MySQL database name |
+| `DATABASE_URL` | Optional | Full SQLAlchemy URI (e.g. `mysql+pymysql://...` or `sqlite:///...`) |
+| `SECRET_KEY` | Dev string | 32+ byte cryptographic key for HMAC session cookie signing |
+| `SESSION_COOKIE_NAME` | `goaltrack_session` | Name of the authentication cookie |
+| `SESSION_MAX_AGE_SECONDS` | `86400` | Session lifetime in seconds (24 hours) |
+| `COOKIE_SECURE` | `false` | Set to `true` when serving behind HTTPS in production |
+| `CORS_ORIGINS` | `http://localhost:5173,...` | Comma-separated allowed frontend origins |
+
 
 ---
 

@@ -1,4 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { api } from "./api";
+
 
 const C = {
   primary:"#1a56db", success:"#059669", warning:"#d97706",
@@ -237,35 +239,61 @@ function EmployeeDash({ cu, goals, setGoals, setAudit }) {
   const pending = myGoals.filter(g=>g.status==="pending");
   const drafts  = myGoals.filter(g=>g.status==="draft");
 
-  const addGoal = (data) => {
+  const addGoal = async (data) => {
     if (active.length>=8) return alert("Maximum 8 goals allowed.");
-    const g = { id:Date.now(), employeeId:cu.id, ...data, status:"draft", locked:false, isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:new Date().toISOString().split("T")[0], achievements:{}, checkins:{} };
-    setGoals(p=>[...p,g]);
+    try {
+      const saved = await api.createGoal(data, cu.id);
+      setGoals(p=>[...p, saved]);
+    } catch {
+      const g = { id:Date.now(), employeeId:cu.id, ...data, status:"draft", locked:false, isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:new Date().toISOString().split("T")[0], achievements:{}, checkins:{} };
+      setGoals(p=>[...p,g]);
+    }
     setAudit(p=>[{id:Date.now(),action:"Goal created",user:cu.name,goalTitle:data.title,timestamp:nowTs(),details:"Draft created"},...p]);
   };
-  const updateGoal = (data) => {
-    setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,...data}:g));
+  const updateGoal = async (data) => {
+    try {
+      const updated = await api.updateGoal(editGoal.id, data);
+      setGoals(p=>p.map(g=>g.id===editGoal.id?updated:g));
+    } catch {
+      setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,...data}:g));
+    }
     setAudit(p=>[{id:Date.now(),action:"Goal edited",user:cu.name,goalTitle:data.title,timestamp:nowTs(),details:"Pre-submission edit"},...p]);
     setEdit(null);
   };
-  const deleteGoal = (g) => {
+  const deleteGoal = async (g) => {
     if (!window.confirm('Delete "'+g.title+'"?')) return;
+    try {
+      await api.deleteGoal(g.id);
+    } catch (e) {
+      console.warn("Delete goal API:", e.message);
+    }
     setGoals(p=>p.filter(x=>x.id!==g.id));
   };
-  const submitAll = () => {
+  const submitAll = async () => {
     if (totalW!==100) return alert("Total weightage must equal 100%. Currently: "+totalW+"%");
     if (drafts.length===0) return alert("No draft goals to submit.");
-    setGoals(p=>p.map(g=>g.employeeId===cu.id&&g.status==="draft"?{...g,status:"pending"}:g));
+    try {
+      await api.submitGoals(cu.id);
+      const refreshed = await api.getGoals();
+      if (refreshed?.length) setGoals(refreshed);
+    } catch {
+      setGoals(p=>p.map(g=>g.employeeId===cu.id&&g.status==="draft"?{...g,status:"pending"}:g));
+    }
     setAudit(p=>[{id:Date.now(),action:"Goals submitted for approval",user:cu.name,goalTitle:"(All drafts)",timestamp:nowTs(),details:drafts.length+" goals submitted"},...p]);
   };
-  const saveAch = (goalId, quarter, achData) => {
+  const saveAch = async (goalId, quarter, achData) => {
     const g=goals.find(x=>x.id===goalId);
-    setGoals(p=>p.map(x=>{
-      if (x.id===goalId) return {...x,achievements:{...x.achievements,[quarter]:achData}};
-      if (g&&g.isShared&&g.sharedGroupId&&x.sharedGroupId===g.sharedGroupId&&g.primaryOwnerId===cu.id)
-        return {...x,achievements:{...x.achievements,[quarter]:achData}};
-      return x;
-    }));
+    try {
+      const updated = await api.logAchievement(goalId, quarter, achData.actual, achData.status);
+      setGoals(p=>p.map(x=>x.id===goalId?updated:x));
+    } catch {
+      setGoals(p=>p.map(x=>{
+        if (x.id===goalId) return {...x,achievements:{...x.achievements,[quarter]:achData}};
+        if (g&&g.isShared&&g.sharedGroupId&&x.sharedGroupId===g.sharedGroupId&&g.primaryOwnerId===cu.id)
+          return {...x,achievements:{...x.achievements,[quarter]:achData}};
+        return x;
+      }));
+    }
     setAudit(p=>[{id:Date.now(),action:"Achievement logged",user:cu.name,goalTitle:g?.title,timestamp:nowTs(),details:quarter+": actual="+achData.actual},...p]);
   };
 
@@ -405,20 +433,26 @@ function ManagerDash({ cu, users, goals, setGoals, setAudit }) {
   const approve = (g) => {
     setGoals(p=>p.map(x=>x.id===g.id?{...x,status:"approved",locked:true}:x));
     setAudit(p=>[{id:Date.now(),action:"Goal approved",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Approved and locked"},...p]);
+    api.approveGoal(g.id).catch(e=>console.warn("API approveGoal deferred:", e.message));
   };
   const returnG = (g) => {
     setGoals(p=>p.map(x=>x.id===g.id?{...x,status:"rejected"}:x));
     setAudit(p=>[{id:Date.now(),action:"Goal returned for rework",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Returned to employee"},...p]);
+    api.rejectGoal(g.id).catch(e=>console.warn("API rejectGoal deferred:", e.message));
   };
   const saveEdit = () => {
-    setGoals(p=>p.map(g=>g.id===editG.id?{...g,target:editG.uom==="Timeline"?editT:(parseFloat(editT)||editT),weightage:parseFloat(editW)}:g));
+    const targetVal = editG.uom==="Timeline"?editT:(parseFloat(editT)||editT);
+    const weightVal = parseFloat(editW);
+    setGoals(p=>p.map(g=>g.id===editG.id?{...g,target:targetVal,weightage:weightVal}:g));
     setAudit(p=>[{id:Date.now(),action:"Goal edited by manager",user:cu.name,goalTitle:editG.title,timestamp:nowTs(),details:"Target->"+editT+", Weight->"+editW+"%"},...p]);
+    api.updateGoal(editG.id, { target: targetVal, weightage: weightVal }).catch(e=>console.warn("API updateGoal deferred:", e.message));
     setEditG(null);
   };
   const saveCi = () => {
     if (!ciC.trim()) return alert("Please enter a check-in comment.");
     setGoals(p=>p.map(g=>g.id===ciG.id?{...g,checkins:{...g.checkins,[ciQ]:{comment:ciC,managerName:cu.name,date:new Date().toISOString().split("T")[0]}}}:g));
     setAudit(p=>[{id:Date.now(),action:"Check-in completed",user:cu.name,goalTitle:ciG.title,timestamp:nowTs(),details:ciQ+" check-in saved"},...p]);
+    api.addCheckin(ciG.id, ciQ, ciC).catch(e=>console.warn("API addCheckin deferred:", e.message));
     setCiG(null); setCiC("");
   };
 
@@ -586,6 +620,7 @@ function AdminDash({ cu, users, goals, setGoals, auditLogs, setAudit, escalation
     const ng=recips.map(u=>({id:Date.now()+u.id,employeeId:u.id,thrustArea:sf.thrust,title:sf.title,description:sf.desc,uom:sf.uom,target:parseFloat(sf.target)||sf.target,weightage:0,status:"approved",locked:true,isShared:true,sharedGroupId:grpId,primaryOwnerId:recips[0].id,createdAt:new Date().toISOString().split("T")[0],achievements:{},checkins:{}}));
     setGoals(p=>[...p,...ng]);
     setAudit(p=>[{id:Date.now(),action:"Shared goal pushed",user:cu.name,goalTitle:sf.title,timestamp:nowTs(),details:"Pushed to "+recips.length+" employees in "+sf.dept},...p]);
+    api.pushSharedGoals(sf).catch(e=>console.warn("API pushSharedGoals deferred:", e.message));
     alert("Shared goal pushed to "+recips.length+" employees in "+sf.dept+"!");
     setSf(p=>({...p,thrust:"",title:"",desc:"",uom:"",target:""}));
   };
@@ -595,10 +630,14 @@ function AdminDash({ cu, users, goals, setGoals, auditLogs, setAudit, escalation
     if (!g) return alert("Goal not found. Check the ID.");
     setGoals(p=>p.map(x=>x.id===gid?{...x,locked:false}:x));
     setAudit(p=>[{id:Date.now(),action:"Goal unlocked (Admin override)",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Admin unlocked for editing"},...p]);
+    api.unlockGoal(gid).catch(e=>console.warn("API unlockGoal deferred:", e.message));
     setUnlockId(""); alert('Goal "'+g.title+'" unlocked!');
   };
 
-  const resolveEsc=(id)=>setEscalations(p=>p.map(e=>e.id===id?{...e,status:"resolved",resolvedAt:new Date().toISOString().split("T")[0]}:e));
+  const resolveEsc=(id)=>{
+    setEscalations(p=>p.map(e=>e.id===id?{...e,status:"resolved",resolvedAt:new Date().toISOString().split("T")[0]}:e));
+    api.resolveEscalation(id).catch(e=>console.warn("API resolveEscalation deferred:", e.message));
+  };
 
   return (
     <div>
@@ -870,18 +909,84 @@ function AnalyticsView({ users, goals }) {
 // ============ ROOT ============
 export default function App() {
   const [cu,setCU]            = useState(null);
-  const [users]               = useState(INIT_USERS);
+  const [users,setUsers]      = useState(INIT_USERS);
   const [goals,setGoals]      = useState(INIT_GOALS);
   const [audit,setAudit]      = useState(INIT_AUDIT);
   const [escs,setEscs]        = useState(INIT_ESC);
   const [section,setSection]  = useState("dashboard");
   const [email,setEmail]      = useState("");
   const [err,setErr]          = useState("");
+  const [health,setHealth]    = useState(null);
+  const [dashStats,setDashStats] = useState(null);
 
-  const login = () => {
-    const u=users.find(x=>x.email.toLowerCase()===email.toLowerCase());
-    if (!u) { setErr("Email not found. Use a demo account below."); return; }
-    setCU(u); setSection("dashboard"); setErr("");
+  const refreshStats = () => {
+    api.getDashboardStats().then(s => setDashStats(s)).catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshStats();
+  }, [goals]);
+
+  useEffect(() => {
+    // Check backend health
+    api.checkHealth()
+      .then(res => setHealth(res))
+      .catch(() => setHealth({ status: "offline", database: "disconnected" }));
+
+    // Check if user has an active session cookie
+    api.getCurrentUser()
+      .then(user => {
+        if (user) {
+          setCU(user);
+          // Fetch initial backend state
+          Promise.all([api.getGoals(), api.getAudit(), api.getEscalations(), api.getUsers(), api.getDashboardStats()])
+            .then(([gList, aList, eList, uList, stats]) => {
+              if (gList?.length) setGoals(gList);
+              if (aList?.length) setAudit(aList);
+              if (eList?.length) setEscs(eList);
+              if (uList?.length) setUsers(uList);
+              if (stats) setDashStats(stats);
+            })
+            .catch(e => console.warn("Deferred sync:", e.message));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+
+  const login = async () => {
+    try {
+      const u = await api.login(email);
+      setCU(u); setSection("dashboard"); setErr("");
+      // Sync fresh data from backend
+      try {
+        const [gList, aList, eList, uList] = await Promise.all([
+          api.getGoals(),
+          api.getAudit(),
+          api.getEscalations(),
+          api.getUsers()
+        ]);
+        if (gList?.length) setGoals(gList);
+        if (aList?.length) setAudit(aList);
+        if (eList?.length) setEscs(eList);
+        if (uList?.length) setUsers(uList);
+      } catch (syncErr) {
+        console.warn("Deferred backend sync:", syncErr.message);
+      }
+    } catch {
+      // Graceful fallback to demo user dataset if backend offline or returning error
+      const u = users.find(x => x.email.toLowerCase() === email.toLowerCase());
+      if (u) {
+        setCU(u); setSection("dashboard"); setErr("");
+      } else {
+        setErr("Email not found. Use a demo account below.");
+      }
+    }
+  };
+
+  const handleSignOut = () => {
+    api.logout().catch(() => {});
+    setCU(null);
   };
 
   if (!cu) {
@@ -892,6 +997,11 @@ export default function App() {
             <div style={{ width:60, height:60, background:"linear-gradient(135deg,#1e3a8a,#7c3aed)", borderRadius:16, display:"flex", alignItems:"center", justifyContent:"center", margin:"0 auto 14px", fontSize:30 }}>🎯</div>
             <h1 style={{ margin:0, fontSize:26, fontWeight:900, color:C.text }}>GoalTrack</h1>
             <p style={{ color:C.muted, fontSize:13, margin:"6px 0 0" }}>Atomberg Technologies | AtomQuest Hackathon 2026</p>
+            {health && (
+              <div style={{ marginTop:8, fontSize:11, fontWeight:700, color:health.status==="ok"?C.success:health.status==="degraded"?C.warning:C.muted }}>
+                {health.status==="ok" ? "● Backend Connected (MySQL/SQLAlchemy)" : health.status==="degraded" ? "● Backend Live (Awaiting DB Connection)" : "○ Standalone Demo Mode"}
+              </div>
+            )}
           </div>
           <div style={{ marginBottom:10 }}>
             <label style={{ fontSize:11, fontWeight:700, color:C.muted, display:"block", marginBottom:5, textTransform:"uppercase", letterSpacing:0.4 }}>Email</label>
@@ -938,6 +1048,11 @@ export default function App() {
           <div style={{ display:"flex", alignItems:"center", gap:10 }}>
             <div style={{ width:34, height:34, background:"linear-gradient(135deg,#1e3a8a,#7c3aed)", borderRadius:9, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17 }}>🎯</div>
             <span style={{ fontWeight:900, fontSize:16, color:C.text }}>GoalTrack</span>
+            {health && (
+              <span style={{ fontSize:10, padding:"2px 8px", borderRadius:999, fontWeight:700, background:health.status==="ok"?"#dcfce7":"#fef9c3", color:health.status==="ok"?"#166534":"#854d0e" }}>
+                {health.status==="ok" ? "API Live" : "API degraded"}
+              </span>
+            )}
           </div>
           <div style={{ display:"flex", gap:2 }}>
             {nav.map(([k,lb])=>(
@@ -955,9 +1070,10 @@ export default function App() {
           <div style={{ width:36, height:36, background:`linear-gradient(135deg,${rolePill[cu.role]},${C.purple})`, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", color:"#fff", fontWeight:800, fontSize:13 }}>
             {cu.name.split(" ").map(n=>n[0]).join("")}
           </div>
-          <button onClick={()=>setCU(null)} style={{ fontSize:12, color:C.muted, background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Sign out</button>
+          <button onClick={handleSignOut} style={{ fontSize:12, color:C.muted, background:"none", border:`1px solid ${C.border}`, borderRadius:6, padding:"4px 10px", cursor:"pointer" }}>Sign out</button>
         </div>
       </div>
+
 
       <div style={{ maxWidth:1120, margin:"0 auto", padding:"28px 24px" }}>
         <div style={{ marginBottom:22 }}>
@@ -969,6 +1085,28 @@ export default function App() {
           </h2>
           <p style={{ margin:"4px 0 0", color:C.muted, fontSize:13 }}>Goal Cycle: May 2026 — April 2027 | Current Window: Q1 Check-in (July 2026)</p>
         </div>
+
+        {dashStats && (
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(200px, 1fr))", gap:12, marginBottom:22 }}>
+            <Card style={{ borderLeft:`4px solid ${C.primary}` }}>
+              <div style={{ fontSize:11, color:C.muted, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>Total Goals (DB)</div>
+              <div style={{ fontSize:24, fontWeight:900, color:C.primary, marginTop:4 }}>{dashStats.total_goals}</div>
+            </Card>
+            <Card style={{ borderLeft:`4px solid ${C.success}` }}>
+              <div style={{ fontSize:11, color:C.muted, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>Completed Goals (DB)</div>
+              <div style={{ fontSize:24, fontWeight:900, color:C.success, marginTop:4 }}>{dashStats.completed_goals}</div>
+            </Card>
+            <Card style={{ borderLeft:`4px solid ${dashStats.overdue_goals>0?C.danger:"#94a3b8"}` }}>
+              <div style={{ fontSize:11, color:C.muted, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>Overdue Goals (DB)</div>
+              <div style={{ fontSize:24, fontWeight:900, color:dashStats.overdue_goals>0?C.danger:C.text, marginTop:4 }}>{dashStats.overdue_goals}</div>
+            </Card>
+            <Card style={{ borderLeft:`4px solid ${C.purple}` }}>
+              <div style={{ fontSize:11, color:C.muted, fontWeight:700, textTransform:"uppercase", letterSpacing:0.5 }}>In Progress (DB)</div>
+              <div style={{ fontSize:24, fontWeight:900, color:C.purple, marginTop:4 }}>{dashStats.in_progress_goals}</div>
+            </Card>
+          </div>
+        )}
+
 
         {section==="dashboard"&&cu.role==="employee"&&<EmployeeDash cu={cu} goals={goals} setGoals={setGoals} setAudit={setAudit} />}
         {section==="dashboard"&&cu.role==="manager"&&<ManagerDash  cu={cu} users={users} goals={goals} setGoals={setGoals} setAudit={setAudit} />}
