@@ -1,0 +1,13 @@
+.git
+.venv
+node_modules
+dist
+data
+**/bin
+**/obj
+*.db
+*.sqlite
+*.sqlite3
+.env
+.env.*
+!.env.example

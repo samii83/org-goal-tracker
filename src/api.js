@@ -21,15 +21,20 @@ async function request(endpoint, options = {}) {
     let errorDetail = `Request failed with status ${res.status}`;
     try {
       const errJson = await res.json();
-      errorDetail = errJson.detail || errJson.message || errorDetail;
+      const fieldErrors = errJson.errors
+        ? Object.values(errJson.errors).flat().join(" ")
+        : "";
+      errorDetail = [errJson.detail, errJson.message, fieldErrors, errJson.title]
+        .find(Boolean) || errorDetail;
     } catch {
-      // response was not JSON
+      errorDetail = res.statusText || errorDetail;
     }
     const err = new Error(errorDetail);
     err.status = res.status;
     throw err;
   }
 
+  if (res.status === 204) return null;
   return res.json();
 }
 
@@ -113,5 +118,4 @@ export const api = {
   // Dashboard Stats
   getDashboardStats: () => request("/dashboard/stats"),
 };
-
 

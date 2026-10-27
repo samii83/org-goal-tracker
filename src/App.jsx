@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "./api";
 
 
@@ -12,40 +12,6 @@ const THRUST_AREAS = ["Revenue Growth","Customer Success","Operational Excellenc
 const UOM_TYPES    = ["Numeric (Higher is Better)","Numeric (Lower is Better)","Timeline","Zero-based"];
 const QUARTERS     = ["Q1 (July)","Q2 (October)","Q3 (January)","Q4/Annual (March)"];
 const STATUSES     = ["Not Started","On Track","Completed"];
-
-const INIT_USERS = [
-  { id:1, name:"Priya Sharma",  email:"priya@atomberg.com",  role:"employee", managerId:2, dept:"Sales" },
-  { id:2, name:"Rajesh Kumar",  email:"rajesh@atomberg.com", role:"manager",  managerId:3, dept:"Sales" },
-  { id:3, name:"Admin HR",      email:"admin@atomberg.com",  role:"admin",    managerId:null, dept:"HR" },
-  { id:4, name:"Anita Singh",   email:"anita@atomberg.com",  role:"employee", managerId:2, dept:"Sales" },
-  { id:5, name:"Vikram Nair",   email:"vikram@atomberg.com", role:"employee", managerId:2, dept:"Operations" },
-];
-
-const INIT_GOALS = [
-  { id:1,  employeeId:1, thrustArea:"Revenue Growth",        title:"Achieve Sales Target",   description:"Hit Rs 50L quarterly sales revenue",     uom:"Numeric (Higher is Better)", target:5000000,   weightage:40, status:"approved", locked:true,  isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{"Q1 (July)":{actual:3200000,status:"On Track",updatedAt:"2026-07-10"}}, checkins:{"Q1 (July)":{comment:"Good momentum, keep pushing!",managerName:"Rajesh Kumar",date:"2026-07-12"}} },
-  { id:2,  employeeId:1, thrustArea:"Customer Success",      title:"Improve CSAT Score",     description:"Customer satisfaction above 4.5/5",      uom:"Numeric (Higher is Better)", target:4.5,       weightage:30, status:"approved", locked:true,  isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{}, checkins:{} },
-  { id:3,  employeeId:1, thrustArea:"Operational Excellence",title:"Reduce TAT",             description:"Turnaround time below 2 days",           uom:"Numeric (Lower is Better)",  target:2,         weightage:20, status:"approved", locked:true,  isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{}, checkins:{} },
-  { id:4,  employeeId:1, thrustArea:"People & Culture",      title:"Training Completion",    description:"Finish all mandatory training by Sep",   uom:"Timeline",                   target:"2026-09-30", weightage:10, status:"approved", locked:true, isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{}, checkins:{} },
-  { id:5,  employeeId:4, thrustArea:"Revenue Growth",        title:"Lead Generation",        description:"100 qualified leads per quarter",        uom:"Numeric (Higher is Better)", target:100,       weightage:60, status:"pending", locked:false, isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-02", achievements:{}, checkins:{} },
-  { id:6,  employeeId:4, thrustArea:"Cost Optimization",     title:"Reduce Travel Expenses", description:"Keep travel under Rs 50K budget",        uom:"Numeric (Lower is Better)",  target:50000,     weightage:40, status:"pending", locked:false, isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-02", achievements:{}, checkins:{} },
-  { id:7,  employeeId:5, thrustArea:"Operational Excellence",title:"Process Efficiency",     description:"Reduce process time by 20%",             uom:"Numeric (Higher is Better)", target:20,        weightage:50, status:"approved", locked:true,  isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{"Q1 (July)":{actual:14,status:"On Track",updatedAt:"2026-07-08"}}, checkins:{} },
-  { id:8,  employeeId:5, thrustArea:"Cost Optimization",     title:"Safety Incidents Zero",  description:"Zero safety incidents in plant",         uom:"Zero-based",                 target:0,         weightage:30, status:"approved", locked:true,  isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{"Q1 (July)":{actual:0,status:"Completed",updatedAt:"2026-07-08"}}, checkins:{} },
-  { id:9,  employeeId:5, thrustArea:"People & Culture",      title:"Team Training Hours",    description:"Complete 40 hrs of team training",       uom:"Numeric (Higher is Better)", target:40,        weightage:20, status:"approved", locked:true,  isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:"2026-05-01", achievements:{}, checkins:{} },
-  { id:10, employeeId:1, thrustArea:"Revenue Growth",        title:"Q2 Sales Blitz KPI",     description:"Dept-wide Q2 sales push target",         uom:"Numeric (Higher is Better)", target:8000000,   weightage:0,  status:"approved", locked:true,  isShared:true,  sharedGroupId:"sg1", primaryOwnerId:1, createdAt:"2026-05-05", achievements:{}, checkins:{} },
-  { id:11, employeeId:4, thrustArea:"Revenue Growth",        title:"Q2 Sales Blitz KPI",     description:"Dept-wide Q2 sales push target",         uom:"Numeric (Higher is Better)", target:8000000,   weightage:0,  status:"approved", locked:true,  isShared:true,  sharedGroupId:"sg1", primaryOwnerId:1, createdAt:"2026-05-05", achievements:{}, checkins:{} },
-];
-
-const INIT_AUDIT = [
-  { id:1, action:"Goal approved",      user:"Rajesh Kumar", goalTitle:"Achieve Sales Target", timestamp:"2026-05-03 10:23", details:"Approved and locked" },
-  { id:2, action:"Achievement logged", user:"Priya Sharma", goalTitle:"Achieve Sales Target", timestamp:"2026-07-10 14:05", details:"Q1 actual: 3,200,000" },
-  { id:3, action:"Goal approved",      user:"Rajesh Kumar", goalTitle:"Process Efficiency",   timestamp:"2026-05-04 09:10", details:"Approved and locked" },
-  { id:4, action:"Shared goal pushed", user:"Admin HR",     goalTitle:"Q2 Sales Blitz KPI",   timestamp:"2026-05-05 11:00", details:"Pushed to 2 Sales employees" },
-];
-
-const INIT_ESC = [
-  { id:1, type:"Goal not submitted",   employeeId:5, employeeName:"Vikram Nair", managerId:2, managerName:"Rajesh Kumar", triggeredAt:"2026-05-08", status:"resolved", resolvedAt:"2026-05-09", note:"Goals submitted after reminder" },
-  { id:2, type:"Check-in overdue",     employeeId:5, employeeName:"Vikram Nair", managerId:2, managerName:"Rajesh Kumar", triggeredAt:"2026-07-18", status:"open",     resolvedAt:null,          note:"" },
-];
 
 function computeScore(goal, quarter) {
   const ach = goal.achievements[quarter];
@@ -159,11 +125,11 @@ function Tabs({ tabs, active, onChange }) {
 function GoalFormModal({ title, initial={}, onClose, onSave, isShared }) {
   const [f, setF] = useState({ thrustArea:"", title:"", description:"", uom:"", target:"", weightage:"", ...initial });
   const u = (k,v) => setF(p=>({...p,[k]:v}));
-  const save = () => {
+  const save = async () => {
     if (!f.thrustArea||!f.title||!f.uom||!f.target||!f.weightage) return alert("Please fill all required fields.");
     if (parseFloat(f.weightage)<10) return alert("Minimum weightage per goal is 10%.");
-    onSave({ ...f, weightage:parseFloat(f.weightage), target:f.uom==="Timeline"?f.target:(parseFloat(f.target)||f.target) });
-    onClose();
+    const saved = await onSave({ ...f, weightage:parseFloat(f.weightage), target:f.uom==="Timeline"?f.target:(parseFloat(f.target)||f.target) });
+    if (saved) onClose();
   };
   return (
     <Modal title={title} onClose={onClose}>
@@ -189,10 +155,10 @@ function AchModal({ goal, onClose, onSave }) {
   const [status,setSt] = useState(goal.achievements["Q1 (July)"]?.status ?? "On Track");
   const chgQ = (nq) => { setQ(nq); setA(goal.achievements[nq]?.actual??""); setSt(goal.achievements[nq]?.status??"On Track"); };
   const score = computeScore({...goal, achievements:{[q]:{actual}}}, q);
-  const save = () => {
+  const save = async () => {
     if (actual==="") return alert("Enter achievement value.");
-    onSave(goal.id, q, { actual:goal.uom==="Timeline"?actual:parseFloat(actual), status, updatedAt:new Date().toISOString().split("T")[0] });
-    onClose();
+    const saved = await onSave(goal.id, q, { actual:goal.uom==="Timeline"?actual:parseFloat(actual), status, updatedAt:new Date().toISOString().split("T")[0] });
+    if (saved) onClose();
   };
   return (
     <Modal title={"Log Achievement - "+goal.title} onClose={onClose}>
@@ -227,6 +193,7 @@ function AchModal({ goal, onClose, onSave }) {
 
 // ============ EMPLOYEE ============
 function EmployeeDash({ cu, goals, setGoals, setAudit }) {
+  const sharedWeightSaves = useRef(new Map());
   const [showCreate, setCreate] = useState(false);
   const [editGoal,   setEdit]   = useState(null);
   const [achGoal,    setAch]    = useState(null);
@@ -240,61 +207,96 @@ function EmployeeDash({ cu, goals, setGoals, setAudit }) {
   const drafts  = myGoals.filter(g=>g.status==="draft");
 
   const addGoal = async (data) => {
-    if (active.length>=8) return alert("Maximum 8 goals allowed.");
+    if (active.length>=8) {
+      alert("Maximum 8 goals allowed.");
+      return false;
+    }
     try {
       const saved = await api.createGoal(data, cu.id);
       setGoals(p=>[...p, saved]);
-    } catch {
-      const g = { id:Date.now(), employeeId:cu.id, ...data, status:"draft", locked:false, isShared:false, sharedGroupId:null, primaryOwnerId:null, createdAt:new Date().toISOString().split("T")[0], achievements:{}, checkins:{} };
-      setGoals(p=>[...p,g]);
+      setAudit(p=>[{id:Date.now(),action:"Goal created",user:cu.name,goalTitle:data.title,timestamp:nowTs(),details:"Draft created"},...p]);
+      return true;
+    } catch (e) {
+      alert(e.message);
+      return false;
     }
-    setAudit(p=>[{id:Date.now(),action:"Goal created",user:cu.name,goalTitle:data.title,timestamp:nowTs(),details:"Draft created"},...p]);
   };
   const updateGoal = async (data) => {
     try {
       const updated = await api.updateGoal(editGoal.id, data);
       setGoals(p=>p.map(g=>g.id===editGoal.id?updated:g));
-    } catch {
-      setGoals(p=>p.map(g=>g.id===editGoal.id?{...g,...data}:g));
+      setAudit(p=>[{id:Date.now(),action:"Goal edited",user:cu.name,goalTitle:data.title,timestamp:nowTs(),details:"Pre-submission edit"},...p]);
+      setEdit(null);
+      return true;
+    } catch (e) {
+      alert(e.message);
+      return false;
     }
-    setAudit(p=>[{id:Date.now(),action:"Goal edited",user:cu.name,goalTitle:data.title,timestamp:nowTs(),details:"Pre-submission edit"},...p]);
-    setEdit(null);
   };
   const deleteGoal = async (g) => {
     if (!window.confirm('Delete "'+g.title+'"?')) return;
     try {
       await api.deleteGoal(g.id);
+      setGoals(p=>p.filter(x=>x.id!==g.id));
     } catch (e) {
-      console.warn("Delete goal API:", e.message);
+      alert(e.message);
     }
-    setGoals(p=>p.filter(x=>x.id!==g.id));
   };
   const submitAll = async () => {
     if (totalW!==100) return alert("Total weightage must equal 100%. Currently: "+totalW+"%");
     if (drafts.length===0) return alert("No draft goals to submit.");
     try {
+      const weightsSaved = await Promise.all(sharedWeightSaves.current.values());
+      if (weightsSaved.some(saved=>!saved)) return;
       await api.submitGoals(cu.id);
       const refreshed = await api.getGoals();
-      if (refreshed?.length) setGoals(refreshed);
-    } catch {
-      setGoals(p=>p.map(g=>g.employeeId===cu.id&&g.status==="draft"?{...g,status:"pending"}:g));
+      setGoals(refreshed);
+      setAudit(p=>[{id:Date.now(),action:"Goals submitted for approval",user:cu.name,goalTitle:"(All drafts)",timestamp:nowTs(),details:drafts.length+" goals submitted"},...p]);
+    } catch (e) {
+      alert(e.message);
     }
-    setAudit(p=>[{id:Date.now(),action:"Goals submitted for approval",user:cu.name,goalTitle:"(All drafts)",timestamp:nowTs(),details:drafts.length+" goals submitted"},...p]);
   };
   const saveAch = async (goalId, quarter, achData) => {
     const g=goals.find(x=>x.id===goalId);
     try {
       const updated = await api.logAchievement(goalId, quarter, achData.actual, achData.status);
       setGoals(p=>p.map(x=>x.id===goalId?updated:x));
-    } catch {
-      setGoals(p=>p.map(x=>{
-        if (x.id===goalId) return {...x,achievements:{...x.achievements,[quarter]:achData}};
-        if (g&&g.isShared&&g.sharedGroupId&&x.sharedGroupId===g.sharedGroupId&&g.primaryOwnerId===cu.id)
-          return {...x,achievements:{...x.achievements,[quarter]:achData}};
-        return x;
-      }));
+      if (g?.isShared && g.sharedGroupId && g.primaryOwnerId===cu.id) {
+        setGoals(p=>p.map(x=>x.sharedGroupId===g.sharedGroupId
+          ? {...x,achievements:{...x.achievements,[quarter]:achData}}
+          : x));
+      }
+      setAudit(p=>[{id:Date.now(),action:"Achievement logged",user:cu.name,goalTitle:g?.title,timestamp:nowTs(),details:quarter+": actual="+achData.actual},...p]);
+      return true;
+    } catch (e) {
+      alert(e.message);
+      return false;
     }
-    setAudit(p=>[{id:Date.now(),action:"Achievement logged",user:cu.name,goalTitle:g?.title,timestamp:nowTs(),details:quarter+": actual="+achData.actual},...p]);
+  };
+  const saveSharedWeight = async (goalId) => {
+    const goal = goals.find(item=>item.id===goalId);
+    if (!goal) return;
+    const save = (async () => {
+      try {
+        const updated = await api.updateGoal(goalId, { weightage:goal.weightage });
+        setGoals(p=>p.map(item=>item.id===goalId?updated:item));
+        return true;
+      } catch (e) {
+        alert(e.message);
+        try {
+          setGoals(await api.getGoals());
+        } catch (refreshError) {
+          alert(`Could not reload saved goals: ${refreshError.message}`);
+        }
+        return false;
+      }
+    })();
+    sharedWeightSaves.current.set(goalId, save);
+    try {
+      return await save;
+    } finally {
+      if (sharedWeightSaves.current.get(goalId) === save) sharedWeightSaves.current.delete(goalId);
+    }
   };
 
   return (
@@ -341,6 +343,7 @@ function EmployeeDash({ cu, goals, setGoals, setAudit }) {
                             <span style={{ color:C.muted }}>Weight:</span>
                             <input type="number" min="0" max="100" value={goal.weightage}
                               onChange={e=>setGoals(p=>p.map(g=>g.id===goal.id?{...g,weightage:parseFloat(e.target.value)||0}:g))}
+                              onBlur={()=>saveSharedWeight(goal.id)}
                               style={{ width:54, padding:"4px 8px", border:`1.5px solid ${C.border}`, borderRadius:6, fontSize:13 }} />%
                           </div>
                         : <span style={{ fontWeight:800, fontSize:14, color:C.primary }}>{goal.weightage}%</span>
@@ -430,30 +433,46 @@ function ManagerDash({ cu, users, goals, setGoals, setAudit }) {
   const approved = teamGoals.filter(g=>g.status==="approved");
   const ciDone   = approved.filter(g=>g.checkins["Q1 (July)"]).length;
 
-  const approve = (g) => {
-    setGoals(p=>p.map(x=>x.id===g.id?{...x,status:"approved",locked:true}:x));
-    setAudit(p=>[{id:Date.now(),action:"Goal approved",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Approved and locked"},...p]);
-    api.approveGoal(g.id).catch(e=>console.warn("API approveGoal deferred:", e.message));
+  const approve = async (g) => {
+    try {
+      const updated = await api.approveGoal(g.id);
+      setGoals(p=>p.map(x=>x.id===g.id?updated:x));
+      setAudit(p=>[{id:Date.now(),action:"Goal approved",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Approved and locked"},...p]);
+    } catch (e) {
+      alert(e.message);
+    }
   };
-  const returnG = (g) => {
-    setGoals(p=>p.map(x=>x.id===g.id?{...x,status:"rejected"}:x));
-    setAudit(p=>[{id:Date.now(),action:"Goal returned for rework",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Returned to employee"},...p]);
-    api.rejectGoal(g.id).catch(e=>console.warn("API rejectGoal deferred:", e.message));
+  const returnG = async (g) => {
+    try {
+      const updated = await api.rejectGoal(g.id);
+      setGoals(p=>p.map(x=>x.id===g.id?updated:x));
+      setAudit(p=>[{id:Date.now(),action:"Goal returned for rework",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Returned to employee"},...p]);
+    } catch (e) {
+      alert(e.message);
+    }
   };
-  const saveEdit = () => {
+  const saveEdit = async () => {
     const targetVal = editG.uom==="Timeline"?editT:(parseFloat(editT)||editT);
     const weightVal = parseFloat(editW);
-    setGoals(p=>p.map(g=>g.id===editG.id?{...g,target:targetVal,weightage:weightVal}:g));
-    setAudit(p=>[{id:Date.now(),action:"Goal edited by manager",user:cu.name,goalTitle:editG.title,timestamp:nowTs(),details:"Target->"+editT+", Weight->"+editW+"%"},...p]);
-    api.updateGoal(editG.id, { target: targetVal, weightage: weightVal }).catch(e=>console.warn("API updateGoal deferred:", e.message));
-    setEditG(null);
+    try {
+      const updated = await api.updateGoal(editG.id, { target: targetVal, weightage: weightVal });
+      setGoals(p=>p.map(g=>g.id===editG.id?updated:g));
+      setAudit(p=>[{id:Date.now(),action:"Goal edited by manager",user:cu.name,goalTitle:editG.title,timestamp:nowTs(),details:"Target->"+editT+", Weight->"+editW+"%"},...p]);
+      setEditG(null);
+    } catch (e) {
+      alert(e.message);
+    }
   };
-  const saveCi = () => {
+  const saveCi = async () => {
     if (!ciC.trim()) return alert("Please enter a check-in comment.");
-    setGoals(p=>p.map(g=>g.id===ciG.id?{...g,checkins:{...g.checkins,[ciQ]:{comment:ciC,managerName:cu.name,date:new Date().toISOString().split("T")[0]}}}:g));
-    setAudit(p=>[{id:Date.now(),action:"Check-in completed",user:cu.name,goalTitle:ciG.title,timestamp:nowTs(),details:ciQ+" check-in saved"},...p]);
-    api.addCheckin(ciG.id, ciQ, ciC).catch(e=>console.warn("API addCheckin deferred:", e.message));
-    setCiG(null); setCiC("");
+    try {
+      const updated = await api.addCheckin(ciG.id, ciQ, ciC);
+      setGoals(p=>p.map(g=>g.id===ciG.id?updated:g));
+      setAudit(p=>[{id:Date.now(),action:"Check-in completed",user:cu.name,goalTitle:ciG.title,timestamp:nowTs(),details:ciQ+" check-in saved"},...p]);
+      setCiG(null); setCiC("");
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   return (
@@ -587,7 +606,7 @@ function ManagerDash({ cu, users, goals, setGoals, setAudit }) {
 }
 
 // ============ ADMIN ============
-function AdminDash({ cu, users, goals, setGoals, auditLogs, setAudit, escalations, setEscalations }) {
+function AdminDash({ users, goals, setGoals, auditLogs, setAudit, escalations, setEscalations }) {
   const [tab,setTab]     = useState("overview");
   const [sf,setSf]       = useState({ dept:"Sales", thrust:"", title:"", desc:"", uom:"", target:"" });
   const [unlockId,setUI] = useState("");
@@ -612,31 +631,41 @@ function AdminDash({ cu, users, goals, setGoals, auditLogs, setAudit, escalation
     const a=document.createElement("a"); a.href=url; a.download="achievement_report.csv"; a.click();
   };
 
-  const pushShared = () => {
+  const pushShared = async () => {
     if (!sf.thrust||!sf.title||!sf.uom||!sf.target) return alert("Fill all fields.");
     const recips=users.filter(u=>u.role==="employee"&&u.dept===sf.dept);
     if (!recips.length) return alert("No employees in that department.");
-    const grpId="sg_"+Date.now();
-    const ng=recips.map(u=>({id:Date.now()+u.id,employeeId:u.id,thrustArea:sf.thrust,title:sf.title,description:sf.desc,uom:sf.uom,target:parseFloat(sf.target)||sf.target,weightage:0,status:"approved",locked:true,isShared:true,sharedGroupId:grpId,primaryOwnerId:recips[0].id,createdAt:new Date().toISOString().split("T")[0],achievements:{},checkins:{}}));
-    setGoals(p=>[...p,...ng]);
-    setAudit(p=>[{id:Date.now(),action:"Shared goal pushed",user:cu.name,goalTitle:sf.title,timestamp:nowTs(),details:"Pushed to "+recips.length+" employees in "+sf.dept},...p]);
-    api.pushSharedGoals(sf).catch(e=>console.warn("API pushSharedGoals deferred:", e.message));
-    alert("Shared goal pushed to "+recips.length+" employees in "+sf.dept+"!");
-    setSf(p=>({...p,thrust:"",title:"",desc:"",uom:"",target:""}));
+    try {
+      await api.pushSharedGoals(sf);
+      setGoals(await api.getGoals());
+      setAudit(await api.getAudit());
+      alert("Shared goal pushed to "+recips.length+" employees in "+sf.dept+"!");
+      setSf(p=>({...p,thrust:"",title:"",desc:"",uom:"",target:""}));
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
-  const unlock = () => {
+  const unlock = async () => {
     const gid=parseInt(unlockId); const g=goals.find(x=>x.id===gid);
     if (!g) return alert("Goal not found. Check the ID.");
-    setGoals(p=>p.map(x=>x.id===gid?{...x,locked:false}:x));
-    setAudit(p=>[{id:Date.now(),action:"Goal unlocked (Admin override)",user:cu.name,goalTitle:g.title,timestamp:nowTs(),details:"Admin unlocked for editing"},...p]);
-    api.unlockGoal(gid).catch(e=>console.warn("API unlockGoal deferred:", e.message));
-    setUnlockId(""); alert('Goal "'+g.title+'" unlocked!');
+    try {
+      const updated = await api.unlockGoal(gid);
+      setGoals(p=>p.map(x=>x.id===gid?updated:x));
+      setAudit(await api.getAudit());
+      setUI(""); alert('Goal "'+g.title+'" unlocked!');
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
-  const resolveEsc=(id)=>{
-    setEscalations(p=>p.map(e=>e.id===id?{...e,status:"resolved",resolvedAt:new Date().toISOString().split("T")[0]}:e));
-    api.resolveEscalation(id).catch(e=>console.warn("API resolveEscalation deferred:", e.message));
+  const resolveEsc=async (id)=>{
+    try {
+      const updated = await api.resolveEscalation(id);
+      setEscalations(p=>p.map(e=>e.id===id?updated:e));
+    } catch (e) {
+      alert(e.message);
+    }
   };
 
   return (
@@ -909,23 +938,22 @@ function AnalyticsView({ users, goals }) {
 // ============ ROOT ============
 export default function App() {
   const [cu,setCU]            = useState(null);
-  const [users,setUsers]      = useState(INIT_USERS);
-  const [goals,setGoals]      = useState(INIT_GOALS);
-  const [audit,setAudit]      = useState(INIT_AUDIT);
-  const [escs,setEscs]        = useState(INIT_ESC);
+  const [users,setUsers]      = useState([]);
+  const [goals,setGoals]      = useState([]);
+  const [audit,setAudit]      = useState([]);
+  const [escs,setEscs]        = useState([]);
   const [section,setSection]  = useState("dashboard");
   const [email,setEmail]      = useState("");
   const [err,setErr]          = useState("");
   const [health,setHealth]    = useState(null);
   const [dashStats,setDashStats] = useState(null);
 
-  const refreshStats = () => {
-    api.getDashboardStats().then(s => setDashStats(s)).catch(() => {});
-  };
-
   useEffect(() => {
-    refreshStats();
-  }, [goals]);
+    if (!cu) return;
+    api.getDashboardStats()
+      .then(setDashStats)
+      .catch(e => setErr(`Could not refresh dashboard stats: ${e.message}`));
+  }, [goals, cu]);
 
   useEffect(() => {
     // Check backend health
@@ -937,56 +965,62 @@ export default function App() {
     api.getCurrentUser()
       .then(user => {
         if (user) {
-          setCU(user);
           // Fetch initial backend state
           Promise.all([api.getGoals(), api.getAudit(), api.getEscalations(), api.getUsers(), api.getDashboardStats()])
             .then(([gList, aList, eList, uList, stats]) => {
-              if (gList?.length) setGoals(gList);
-              if (aList?.length) setAudit(aList);
-              if (eList?.length) setEscs(eList);
-              if (uList?.length) setUsers(uList);
-              if (stats) setDashStats(stats);
+              setGoals(gList);
+              setAudit(aList);
+              setEscs(eList);
+              setUsers(uList);
+              setDashStats(stats);
+              setCU(user);
             })
-            .catch(e => console.warn("Deferred sync:", e.message));
+            .catch(e => setErr(`Could not load saved data: ${e.message}`));
         }
       })
-      .catch(() => {});
+      .catch(e => {
+        if (e.status !== 401) setErr(`Could not check the saved session: ${e.message}`);
+      });
   }, []);
 
 
   const login = async () => {
     try {
       const u = await api.login(email);
-      setCU(u); setSection("dashboard"); setErr("");
+      setSection("dashboard");
       // Sync fresh data from backend
-      try {
-        const [gList, aList, eList, uList] = await Promise.all([
-          api.getGoals(),
-          api.getAudit(),
-          api.getEscalations(),
-          api.getUsers()
-        ]);
-        if (gList?.length) setGoals(gList);
-        if (aList?.length) setAudit(aList);
-        if (eList?.length) setEscs(eList);
-        if (uList?.length) setUsers(uList);
-      } catch (syncErr) {
-        console.warn("Deferred backend sync:", syncErr.message);
-      }
-    } catch {
-      // Graceful fallback to demo user dataset if backend offline or returning error
-      const u = users.find(x => x.email.toLowerCase() === email.toLowerCase());
-      if (u) {
-        setCU(u); setSection("dashboard"); setErr("");
-      } else {
-        setErr("Email not found. Use a demo account below.");
-      }
+      const [gList, aList, eList, uList, stats] = await Promise.all([
+        api.getGoals(),
+        api.getAudit(),
+        api.getEscalations(),
+        api.getUsers(),
+        api.getDashboardStats()
+      ]);
+      setGoals(gList);
+      setAudit(aList);
+      setEscs(eList);
+      setUsers(uList);
+      setDashStats(stats);
+      setCU(u);
+      setSection("dashboard");
+      setErr("");
+    } catch (e) {
+      setErr(e.message || "Sign in failed. Check the email and API connection.");
     }
   };
 
-  const handleSignOut = () => {
-    api.logout().catch(() => {});
-    setCU(null);
+  const handleSignOut = async () => {
+    try {
+      await api.logout();
+      setCU(null);
+      setGoals([]);
+      setAudit([]);
+      setEscs([]);
+      setUsers([]);
+      setErr("");
+    } catch (e) {
+      alert(`Could not sign out: ${e.message}`);
+    }
   };
 
   if (!cu) {
@@ -999,7 +1033,7 @@ export default function App() {
             <p style={{ color:C.muted, fontSize:13, margin:"6px 0 0" }}>Atomberg Technologies | AtomQuest Hackathon 2026</p>
             {health && (
               <div style={{ marginTop:8, fontSize:11, fontWeight:700, color:health.status==="ok"?C.success:health.status==="degraded"?C.warning:C.muted }}>
-                {health.status==="ok" ? "● Backend Connected (MySQL/SQLAlchemy)" : health.status==="degraded" ? "● Backend Live (Awaiting DB Connection)" : "○ Standalone Demo Mode"}
+                {health.status==="ok" ? "● ASP.NET Core API + SQLite Connected" : health.status==="degraded" ? "● Backend Live (Database unavailable)" : "○ Backend Offline"}
               </div>
             )}
           </div>
@@ -1074,6 +1108,7 @@ export default function App() {
         </div>
       </div>
 
+      {err && <div role="alert" style={{ maxWidth:1072, margin:"16px auto 0", padding:"10px 14px", borderRadius:8, background:"#fee2e2", color:"#991b1b", fontSize:13 }}>{err}</div>}
 
       <div style={{ maxWidth:1120, margin:"0 auto", padding:"28px 24px" }}>
         <div style={{ marginBottom:22 }}>
